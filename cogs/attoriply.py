@@ -7,13 +7,13 @@ import re
 from datetime import datetime
 
 DATA_FILE = 'commands_data.json'
-IMAGE_DIR = 'saved_images' # Folder to store permanent images
+IMAGE_DIR = 'saved_images' # Local folder for permanent images
 
 # Create folder if it doesn't exist
 if not os.path.exists(IMAGE_DIR):
     os.makedirs(IMAGE_DIR)
 
-# Regex to find links in text
+# Regex to extract links
 URL_REGEX = re.compile(r'(https?://\S+)')
 
 # Function to load and save data
@@ -51,21 +51,21 @@ class DashboardView(discord.ui.View):
             reply_text = reply_msg.content
             image_url = None
             
-            # 1. Handle Direct Image Upload (Saves locally so it never expires)
+            # 1. Handle Direct Image Upload (Permanent Save)
             if reply_msg.attachments:
                 attachment = reply_msg.attachments[0]
                 ext = attachment.filename.split('.')[-1]
                 local_path = os.path.join(IMAGE_DIR, f"{trigger}.{ext}")
                 
                 await attachment.save(local_path)
-                image_url = local_path # Saving the local file path instead of a Discord link
+                image_url = local_path 
                 
             # 2. Handle Links in Text
             else:
                 match = URL_REGEX.search(reply_text)
                 if match:
-                    image_url = match.group(0) # Extract the link
-                    reply_text = reply_text.replace(image_url, '').strip() # Remove link from text
+                    image_url = match.group(0)
+                    reply_text = reply_text.replace(image_url, '').strip() 
             
             # Save data
             data = load_data()
@@ -77,7 +77,6 @@ class DashboardView(discord.ui.View):
             
             await interaction.followup.send(f"✅ **Successfully saved!**\n**Trigger:** `{trigger}`", ephemeral=True)
             
-            # Clean up the chat
             await trigger_msg.delete()
             await reply_msg.delete()
             
@@ -97,7 +96,7 @@ class DashboardView(discord.ui.View):
             
             data = load_data()
             if trigger in data:
-                # If there's a locally saved image, delete it to save storage
+                # Delete local image if exists
                 saved_image = data[trigger].get("image")
                 if saved_image and not saved_image.startswith("http"):
                     if os.path.exists(saved_image):
@@ -119,7 +118,8 @@ class AutoReplyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="dashboard", description="Open the Auto-Reply Dashboard")
+    # 1. Dashboard Command with ALIASES ('dash', 'db')
+    @commands.command(name="dashboard", aliases=["dash", "db"], help="Open the Auto-Reply Dashboard")
     @commands.has_permissions(administrator=True)
     async def dashboard(self, ctx: commands.Context):
         embed = discord.Embed(
@@ -129,7 +129,8 @@ class AutoReplyCog(commands.Cog):
         )
         await ctx.send(embed=embed, view=DashboardView(self.bot))
 
-    @commands.hybrid_command(name="help", description="List all available auto-reply commands")
+    # 2. Help Command
+    @commands.command(name="help", help="List all available auto-reply commands")
     async def help_command(self, ctx: commands.Context):
         data = load_data()
         
@@ -155,6 +156,7 @@ class AutoReplyCog(commands.Cog):
         
         await ctx.send(embed=embed)
 
+    # 3. Auto-Reply Event
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -178,10 +180,8 @@ class AutoReplyCog(commands.Cog):
             
             if image_url:
                 if image_url.startswith("http"):
-                    # If it's a web link
                     embed.set_image(url=image_url)
                 else:
-                    # If it's a locally saved image file
                     if os.path.exists(image_url):
                         filename = os.path.basename(image_url)
                         file_to_send = discord.File(image_url, filename=filename)
@@ -191,7 +191,6 @@ class AutoReplyCog(commands.Cog):
             avatar_url = message.author.display_avatar.url if message.author.display_avatar else None
             embed.set_footer(text=footer_text, icon_url=avatar_url)
 
-            # Send with or without local file attachment
             if file_to_send:
                 await message.channel.send(file=file_to_send, embed=embed)
             else:
@@ -199,4 +198,4 @@ class AutoReplyCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(AutoReplyCog(bot))
-                                            
+    

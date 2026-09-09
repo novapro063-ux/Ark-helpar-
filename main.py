@@ -8,7 +8,7 @@ class MyBot(commands.Bot):
         intents.message_content = True
         
         # এখানে help_command=None যুক্ত করা হয়েছে ডিফল্ট হেল্প বন্ধ করার জন্য
-        super().__init__(command_prefix='!', intents=intents, help_command=None)
+        super().__init__(command_prefix='.', intents=intents, help_command=None)
 
     async def setup_hook(self):
         if not os.path.exists('./cogs'):

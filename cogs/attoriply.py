@@ -3,10 +3,11 @@ from discord.ext import commands
 import json
 import os
 import asyncio
+from datetime import datetime
 
 DATA_FILE = 'commands_data.json'
 
-# ডেটা সেভ ও লোড করার ফাংশন
+# Function to load and save data
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r') as f:
@@ -17,37 +18,33 @@ def save_data(data):
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-# ড্যাশবোর্ডের বাটন সিস্টেম
+# Dashboard Button System
 class DashboardView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="➕ নতুন কমান্ড বানান", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="➕ Add New Command", style=discord.ButtonStyle.success)
     async def add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("📝 **দয়া করে ট্রিগারটি লিখুন** (যেটা লিখলে বট রিপ্লাই দেবে, যেমন: hello)।\n*আপনার কাছে ৬০ সেকেন্ড সময় আছে।*", ephemeral=True)
+        await interaction.response.send_message("📝 **Please type the trigger word** (e.g., rex).\n*You have 60 seconds.*", ephemeral=True)
         
         def check(m):
             return m.author == interaction.user and m.channel == interaction.channel
 
         try:
-            # ট্রিগার নেওয়া হচ্ছে
             trigger_msg = await self.bot.wait_for('message', check=check, timeout=60.0)
             trigger = trigger_msg.content.lower()
             
-            await interaction.followup.send("🖼️ **এবার রিপ্লাই দিন!**\nআপনি চাইলে কোনো টেক্সট, **GIF এর লিংক** দিতে পারেন। অথবা এই মেসেজেই সরাসরি **ছবি বা GIF আপলোড** করতে পারেন।", ephemeral=True)
+            await interaction.followup.send("🖼️ **Now, send the reply!**\nYou can send text, a **GIF link**, or directly **upload an image/GIF** here.", ephemeral=True)
             
-            # রিপ্লাই নেওয়া হচ্ছে (ছবি সহ)
             reply_msg = await self.bot.wait_for('message', check=check, timeout=120.0)
             
             reply_text = reply_msg.content
             image_url = None
             
-            # কেউ যদি সরাসরি চ্যানেল থেকে ছবি/GIF আপলোড করে
             if reply_msg.attachments:
                 image_url = reply_msg.attachments[0].url
             
-            # ডেটাবেসে সেভ করা
             data = load_data()
             data[trigger] = {
                 "text": reply_text,
@@ -55,18 +52,17 @@ class DashboardView(discord.ui.View):
             }
             save_data(data)
             
-            await interaction.followup.send(f"✅ **সফলভাবে সেভ হয়েছে!**\n**ট্রিগার:** `{trigger}`\n**ছবি/GIF:** {'যোগ করা হয়েছে 🖼️' if image_url else 'শুধু টেক্সট 📝'}", ephemeral=True)
+            await interaction.followup.send(f"✅ **Successfully saved!**\n**Trigger:** `{trigger}`", ephemeral=True)
             
-            # সিকিউরিটির জন্য ইউজারের পাঠানো মেসেজগুলো ডিলিট করে দেওয়া
             await trigger_msg.delete()
             await reply_msg.delete()
             
         except asyncio.TimeoutError:
-            await interaction.followup.send("❌ সময় শেষ! আবার ড্যাশবোর্ড থেকে চেষ্টা করুন।", ephemeral=True)
+            await interaction.followup.send("❌ Time's up! Please try again from the dashboard.", ephemeral=True)
 
-    @discord.ui.button(label="🗑️ কমান্ড মুছুন", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="🗑️ Delete Command", style=discord.ButtonStyle.danger)
     async def del_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🗑️ **যে ট্রিগারটি মুছতে চান সেটি লিখুন:**", ephemeral=True)
+        await interaction.response.send_message("🗑️ **Type the trigger word you want to delete:**", ephemeral=True)
         
         def check(m):
             return m.author == interaction.user and m.channel == interaction.channel
@@ -79,32 +75,59 @@ class DashboardView(discord.ui.View):
             if trigger in data:
                 del data[trigger]
                 save_data(data)
-                await interaction.followup.send(f"✅ `{trigger}` সফলভাবে ডিলিট করা হয়েছে।", ephemeral=True)
+                await interaction.followup.send(f"✅ `{trigger}` has been successfully deleted.", ephemeral=True)
             else:
-                await interaction.followup.send("⚠️ এই নামে কোনো কমান্ড পাওয়া যায়নি।", ephemeral=True)
+                await interaction.followup.send("⚠️ No command found with this trigger.", ephemeral=True)
                 
             await del_msg.delete()
                 
         except asyncio.TimeoutError:
-            await interaction.followup.send("❌ সময় শেষ!", ephemeral=True)
+            await interaction.followup.send("❌ Time's up!", ephemeral=True)
 
-# মূল Cog ক্লাস
+# Main Cog Class
 class AutoReplyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # হাইব্রিড কমান্ড (স্ল্যাশ / এবং প্রেফিক্স ! দুটোই কাজ করবে)
-    @commands.hybrid_command(name="dashboard", description="Auto-Reply ড্যাশবোর্ড ওপেন করুন")
-    @commands.has_permissions(administrator=True) # শুধু অ্যাডমিনরা ড্যাশবোর্ড আনতে পারবে
+    # 1. Dashboard Command
+    @commands.hybrid_command(name="dashboard", description="Open the Auto-Reply Dashboard")
+    @commands.has_permissions(administrator=True)
     async def dashboard(self, ctx: commands.Context):
         embed = discord.Embed(
-            title="⚙️ Auto-Reply Dashboard", 
-            description="নিচের বাটনগুলোতে ক্লিক করে খুব সহজেই অটো-রিপ্লাই বানান।\nআপনি **লিংক** অথবা সরাসরি **ছবি/GIF আপলোড** করেও রিপ্লাই বানাতে পারবেন।", 
-            color=discord.Color.brand_green()
+            title="⚙️ Auto-Reply Management", 
+            description="Manage your custom auto-replies below.\nYou can set text, links, or directly upload images/GIFs.", 
+            color=discord.Color.dark_theme()
         )
         await ctx.send(embed=embed, view=DashboardView(self.bot))
 
-    # ইউজার মেসেজ দিলে চেক করে রিপ্লাই দেওয়ার ইভেন্ট
+    # 2. Help Command (Changed from arhelp to help)
+    @commands.hybrid_command(name="help", description="List all available auto-reply commands")
+    async def help_command(self, ctx: commands.Context):
+        data = load_data()
+        
+        if not data:
+            embed = discord.Embed(
+                title="📜 Custom Commands List", 
+                description="*No custom commands have been created yet.*", 
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        cmd_list = [f"• `{trigger}`" for trigger in data.keys()]
+        description = "\n".join(cmd_list)[:4000]
+
+        embed = discord.Embed(
+            title="📜 Available Custom Commands",
+            description=f"Here are the auto-reply triggers you can use in this server:\n\n{description}",
+            color=discord.Color.teal()
+        )
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text=f"Total Commands: {len(data)}")
+        
+        await ctx.send(embed=embed)
+
+    # 3. Auto-Reply Event
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -118,16 +141,21 @@ class AutoReplyCog(commands.Cog):
             text = reply_data.get("text", "")
             image_url = reply_data.get("image", None)
 
-            # টেক্সট এবং আপলোড করা ছবি থাকলে
-            if text and image_url:
-                await message.channel.send(content=f"{text}\n{image_url}")
-            # শুধু টেক্সট বা লিংক থাকলে (ডিসকর্ড লিংকে এমনিতেই GIF প্রিভিউ করে দেয়)
-            elif text:
-                await message.channel.send(content=text)
-            # শুধু সরাসরি ছবি আপলোড করা থাকলে
-            elif image_url:
-                await message.channel.send(content=image_url)
+            embed = discord.Embed(
+                title=content.title(),
+                description=text if text else None,
+                color=discord.Color.teal()
+            )
+            
+            if image_url:
+                embed.set_image(url=image_url)
+                
+            footer_text = f"{message.author.display_name} | {datetime.now().strftime('%m/%d/%Y %I:%M %p')}"
+            avatar_url = message.author.display_avatar.url if message.author.display_avatar else None
+            embed.set_footer(text=footer_text, icon_url=avatar_url)
+
+            await message.channel.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(AutoReplyCog(bot))
-        
+    

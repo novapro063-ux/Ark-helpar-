@@ -67,7 +67,7 @@ class DashboardView(discord.ui.View):
                     image_url = match.group(0)
                     reply_text = reply_text.replace(image_url, '').strip() 
             
-            # Save data
+            # Save to global data
             data = load_data()
             data[trigger] = {
                 "text": reply_text,
@@ -75,7 +75,7 @@ class DashboardView(discord.ui.View):
             }
             save_data(data)
             
-            await interaction.followup.send(f"✅ **Successfully saved!**\n**Trigger:** `{trigger}`", ephemeral=True)
+            await interaction.followup.send(f"✅ **Successfully saved globally!**\n**Trigger:** `{trigger}`", ephemeral=True)
             
             await trigger_msg.delete()
             await reply_msg.delete()
@@ -104,7 +104,7 @@ class DashboardView(discord.ui.View):
                 
                 del data[trigger]
                 save_data(data)
-                await interaction.followup.send(f"✅ `{trigger}` has been successfully deleted.", ephemeral=True)
+                await interaction.followup.send(f"✅ `{trigger}` has been successfully deleted from global database.", ephemeral=True)
             else:
                 await interaction.followup.send("⚠️ No command found with this trigger.", ephemeral=True)
                 
@@ -123,8 +123,8 @@ class AutoReplyCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def dashboard(self, ctx: commands.Context):
         embed = discord.Embed(
-            title="⚙️ Auto-Reply Management", 
-            description="Manage your custom auto-replies below.\nYou can set text, links, or directly upload images/GIFs.", 
+            title="⚙️ Global Auto-Reply Management", 
+            description="Manage your custom auto-replies below.\nCommands created here will work in **all servers** this bot is in.", 
             color=discord.Color.dark_theme()
         )
         await ctx.send(embed=embed, view=DashboardView(self.bot))
@@ -136,7 +136,7 @@ class AutoReplyCog(commands.Cog):
         
         if not data:
             embed = discord.Embed(
-                title="📜 Custom Commands List", 
+                title="📜 Global Custom Commands List", 
                 description="*No custom commands have been created yet.*", 
                 color=discord.Color.red()
             )
@@ -147,8 +147,8 @@ class AutoReplyCog(commands.Cog):
         description = "\n".join(cmd_list)[:4000]
 
         embed = discord.Embed(
-            title="📜 Available Custom Commands",
-            description=f"Here are the auto-reply triggers you can use in this server:\n\n{description}",
+            title="📜 Available Global Commands",
+            description=f"Here are the auto-reply triggers you can use anywhere:\n\n{description}",
             color=discord.Color.teal()
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
@@ -156,45 +156,49 @@ class AutoReplyCog(commands.Cog):
         
         await ctx.send(embed=embed)
 
-    # 3. Auto-Reply Event
+    # 3. Auto-Reply Event (Global Checked)
     @commands.Cog.listener()
     async def on_message(self, message):
+        # Ignore bots
         if message.author.bot:
             return
 
         data = load_data()
         content = message.content.lower()
 
-        if content in data:
-            reply_data = data[content]
-            text = reply_data.get("text", "")
-            image_url = reply_data.get("image", None)
+        # Check triggers anywhere in the message across any server
+        for trigger, reply_data in data.items():
+            if trigger in content:
+                text = reply_data.get("text", "")
+                image_url = reply_data.get("image", None)
 
-            embed = discord.Embed(
-                title=content.title(),
-                description=text if text else None,
-                color=discord.Color.teal()
-            )
-            
-            file_to_send = None
-            
-            if image_url:
-                if image_url.startswith("http"):
-                    embed.set_image(url=image_url)
+                embed = discord.Embed(
+                    title=trigger.title(),
+                    description=text if text else None,
+                    color=discord.Color.teal()
+                )
+                
+                file_to_send = None
+                
+                if image_url:
+                    if image_url.startswith("http"):
+                        embed.set_image(url=image_url)
+                    else:
+                        if os.path.exists(image_url):
+                            filename = os.path.basename(image_url)
+                            file_to_send = discord.File(image_url, filename=filename)
+                            embed.set_image(url=f"attachment://{filename}")
+
+                footer_text = f"{message.author.display_name} | {datetime.now().strftime('%m/%d/%Y %I:%M %p')}"
+                avatar_url = message.author.display_avatar.url if message.author.display_avatar else None
+                embed.set_footer(text=footer_text, icon_url=avatar_url)
+
+                if file_to_send:
+                    await message.channel.send(file=file_to_send, embed=embed)
                 else:
-                    if os.path.exists(image_url):
-                        filename = os.path.basename(image_url)
-                        file_to_send = discord.File(image_url, filename=filename)
-                        embed.set_image(url=f"attachment://{filename}")
-
-            footer_text = f"{message.author.display_name} | {datetime.now().strftime('%m/%d/%Y %I:%M %p')}"
-            avatar_url = message.author.display_avatar.url if message.author.display_avatar else None
-            embed.set_footer(text=footer_text, icon_url=avatar_url)
-
-            if file_to_send:
-                await message.channel.send(file=file_to_send, embed=embed)
-            else:
-                await message.channel.send(embed=embed)
+                    await message.channel.send(embed=embed)
+                
+                break 
 
 async def setup(bot):
     await bot.add_cog(AutoReplyCog(bot))

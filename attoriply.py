@@ -93,10 +93,10 @@ class AutoReplyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # ড্যাশবোর্ড আনার কমান্ড
-    @commands.command()
+    # হাইব্রিড কমান্ড (স্ল্যাশ / এবং প্রেফিক্স ! দুটোই কাজ করবে)
+    @commands.hybrid_command(name="dashboard", description="Auto-Reply ড্যাশবোর্ড ওপেন করুন")
     @commands.has_permissions(administrator=True) # শুধু অ্যাডমিনরা ড্যাশবোর্ড আনতে পারবে
-    async def dashboard(self, ctx):
+    async def dashboard(self, ctx: commands.Context):
         embed = discord.Embed(
             title="⚙️ Auto-Reply Dashboard", 
             description="নিচের বাটনগুলোতে ক্লিক করে খুব সহজেই অটো-রিপ্লাই বানান।\nআপনি **লিংক** অথবা সরাসরি **ছবি/GIF আপলোড** করেও রিপ্লাই বানাতে পারবেন।", 
@@ -130,4 +130,4 @@ class AutoReplyCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(AutoReplyCog(bot))
-    
+        
